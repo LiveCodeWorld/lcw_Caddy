@@ -4,7 +4,12 @@
 license: GPLv3
 name: lib_Caddy
 type: library
-version: 0.1
+version: 0.2
+
+/*
+This library is for installing and manipulating a Caddy Server.
+The aim is to have a locally running Caddy environment which runs Livecode command line cgi/s and Javascript
+*/
 
 
 --> Caddy
