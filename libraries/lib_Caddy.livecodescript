@@ -65,6 +65,7 @@ command caddy_CloseServerProcesses pIDs
    end if
    --
    repeat for each item pID in pIDs
+      -- close process pName
       kill process pID -- bug: does not kill?
    end repeat
    
@@ -74,6 +75,16 @@ command caddy_CloseServerProcesses pIDs
    lcw_Notify sComment, "Caddy Server"
    return pIDs
 end caddy_CloseServerProcesses
+
+command caddy_ForceQuit
+   breakpoint
+   put caddy_ListProcessIds() into pIDs
+   repeat for each item pID in pIDs
+      kill -9 process pIDs -- does not work on OSX
+   end repeat
+   put caddy_ListProcessIds() into stillOpenIDs
+   return stillOpenIDs
+end caddy_ForceQuit
 
 
 --> Display
