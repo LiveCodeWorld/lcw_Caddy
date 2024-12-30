@@ -12,6 +12,73 @@ The aim is to have a locally running Caddy environment which runs Livecode comma
 */
 
 
+--> Display
+-
+command display_CaddyTools
+   -- put caddy_ConstructArray() into cArray
+   put caddy_FetchConfig() into caddyConfigData
+   put caddyRouteArray_Get(caddyConfigData) into routeArray
+   put caddyRouteArray_ListWikiHosts (routeArray) into wikiDomains
+   
+   display_Tool wikiDomains, "Admin", "Caddy", "lib_Caddy"
+   put the result into dView
+   --
+   set the caddy_ConfigData of dView to caddyConfigData
+   return dView
+end display_CaddyTools
+
+command display_CaddyAdmin
+   display_Browser "http://localhost:2019/config/"
+end display_CaddyAdmin
+
+function caddyRouteArray_FindHostArray wikiDomain, routeIndexArray
+   put caddyRouteArray_FindItemArray(wikiDomain, routeIndexArray) into routeItemArray
+   put routeItemArray ["match"][1]["host"] into hostArray
+   return hostArray
+end caddyRouteArray_FindHostArray
+
+function caddyRouteArray_FindItemArray wikiDomain, routeIndexArray
+   put item 2 of the extents of routeIndexArray into maxItem
+   repeat with routeNum = 1 to maxItem
+      put routeIndexArray [routeNum] into routeItemArray
+      --
+      put routeItemArray ["match"][1]["host"] into hostArray
+      repeat for each element sLine in hostArray
+         if char 1 to 2 of sLine = "*." then next repeat
+         --
+         if sLine = wikiDomain then
+            return routeItemArray
+         end if
+      end repeat
+   end repeat
+   return empty
+end caddyRouteArray_FindItemArray
+
+function caddyRouteArray_ListWikiHosts routeArray
+   put item 2 of the extents of routeArray into maxItem
+   repeat with routeNum = 1 to maxItem
+      put routeArray [routeNum]["match"][1]["host"] into hostArray
+      --
+      repeat for each element sLine in hostArray
+         if char 1 to 2 of sLine = "*." then next repeat
+         --
+         put sLine & CR after sDomains
+      end repeat
+   end repeat
+   delete char -1 of sDomains
+   url_SortDomainIndex sDomains
+   return sDomains
+end caddyRouteArray_ListWikiHosts
+
+function caddyRouteArray_Get caddyConfigData, pSrvName
+   -- routeArray is an indexArray
+   if pSrvName is empty then put "srv0" into pSrvName
+   --
+   put caddyConfigData ["apps"]["http"]["servers"][pSrvName]["routes"] into indexArray
+   return indexArray
+end caddyRouteArray_Get
+
+
 --> Working on
 -
 command caddy_Start pLog
@@ -86,24 +153,6 @@ command caddy_ForceQuit
    return stillOpenIDs
 end caddy_ForceQuit
 
-
---> Display
--
-command display_CaddyAdmin
-   display_Browser "http://localhost:2019/config/"
-end display_CaddyAdmin
-
-command display_CaddyTools
-   -- put caddy_ConstructArray() into cArray
-   put caddy_FetchConfig() into cArray
-   display_Tool cArray, "Admin", "Caddy", "lib_Caddy"
-   put the result into dView
-   return dView
-end display_CaddyTools
-
-
---> Working on
--
 command toggleServer_Caddy
    if caddy_IsRunning() then
       caddy_Stop
@@ -154,19 +203,6 @@ function caddyRouteArray_Construct wikiDomain, toDomainPort
    --
    return routeArray
 end caddyRouteArray_Construct
-
-function caddyRouteArray_Hosts routeArray
-   put routeArray ["match"][1][host] into hostArray
-   combine hostArray by row
-   --
-   repeat for each line sLine in hostArray
-      if char 1 to 2 of sLine = "*." then next repeat
-      --
-      put sLine & CR after sDomains
-   end repeat
-   delete char -1 of sDomains
-   return sDomains
-end caddyRouteArray_Hosts
 
 
 --> Caddy
