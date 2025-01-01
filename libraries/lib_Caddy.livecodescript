@@ -4,12 +4,31 @@
 license: GPLv3
 name: lib_Caddy
 type: library
-version: 0.4
+version: 0.6
 
 /*
 This library is for installing and manipulating a Caddy Server.
 The aim is to have a locally running Caddy environment which runs Livecode command line cgi/s and Javascript
 */
+
+
+command caddy_TestSetBody sBody
+   -- caddy_TestSetBody "Work smarter, not harder."
+   put caddy_ConstructCurl (sBody) into sShell
+   put shell (sShell) into sResult
+   
+   /*
+   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+   Dload  Upload   Total   Spent    Left  Speed
+   
+   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+   100   106  100    79  100    27   5240   1790 --:--:-- --:--:-- --:--:--  7066
+   {"error":"invalid traversal path at: config/apps/http/servers/example/routes"}
+   */
+   put line 1 to 3 of sResult into sHeader
+   delete line 1 to 3 of sResult
+   return sResult
+end caddy_TestSetBody
 
 
 --> Display
@@ -219,24 +238,6 @@ function caddy_FetchConfigJson
    return cJSON
 end caddy_FetchConfigJson
 
-command caddy_TestSetBody sBody
-   -- caddy_TestSetBody "Work smarter, not harder."
-   put caddy_ConstructCurl (sBody) into sShell
-   put shell (sShell) into sResult
-   
-   /*
-   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-   Dload  Upload   Total   Spent    Left  Speed
-   
-   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
-   100   106  100    79  100    27   5240   1790 --:--:-- --:--:-- --:--:--  7066
-   {"error":"invalid traversal path at: config/apps/http/servers/example/routes"}
-   */
-   put line 1 to 3 of sResult into sHeader
-   delete line 1 to 3 of sResult
-   return sResult
-end caddy_TestSetBody
-
 function caddy_ConstructCurl sBody
    put "curl" && "localhost:2019/config/apps/http/servers/srv0/routes/0/handle/0/body" into sShell
    -- put "curl" && "localhost:2019/config/apps/http/servers/example/routes/0/handle/body" into sShell
@@ -333,9 +334,11 @@ function caddyFile_Construct pTopDomains, pToLocalHostPort
    put CR & "}" after caddyFileText
    put CR after caddyFileText
    --
-   put CR & "# Handle rest.livecode.world" after caddyFileText   
+   put platform_RestDomain() into restDomain
+   put CR & "# Handle" && restDomain after caddyFileText   
    put caddFile_ConstructToProxy (9090) into toProxy
-   put CR & caddyFile_ConstructProxyLine ("rest.livecode.world", toProxy) after caddyFileText
+   put platform_RestDomain() into restDomain
+   put CR & caddyFile_ConstructProxyLine (restDomain, toProxy) after caddyFileText
    --
    put CR after caddyFileText
    put CR & "# Catch-all for wikis and their subdomains" after caddyFileText
@@ -374,18 +377,6 @@ command caddyAsset_Set pShortFile, sText
    text_Set caddyAssetFile, sText
    return caddyAssetFile
 end caddyAsset_Set
-
-function caddyAsset_ConstructFile pShortFile
-   if pShortFile is empty then put "CaddyFile" into pShortFile
-   put caddyAsset_Folder() & pShortFile into caddyAssetFile
-   return caddyAssetFile
-end caddyAsset_ConstructFile
-
-function caddyAsset_Folder
-   put wikiFolder_ConstructAssets ("server.livecode.world") into assetsFolder
-   put assetsFolder & "caddy/" into caddyAssetsFolder
-   return caddyAssetsFolder
-end caddyAsset_Folder
 
 
 --> Caddy | Install
@@ -429,6 +420,21 @@ command caddy_DoShell someShellCommand
    put shell (someShellCommand) into shellResult
    return shellResult
 end caddy_DoShell
+
+
+--> Caddy | Files
+-
+function caddyAsset_ConstructFile pShortFile
+   if pShortFile is empty then put "CaddyFile" into pShortFile
+   put caddyAsset_Folder() & pShortFile into caddyAssetFile
+   return caddyAssetFile
+end caddyAsset_ConstructFile
+
+function caddyAsset_Folder
+   put wikiFolder_ConstructAssets ("server.livecode.wiki") into assetsFolder
+   put assetsFolder & "caddy/" into caddyAssetsFolder
+   return caddyAssetsFolder
+end caddyAsset_Folder
 
 function caddy_GetBinFolder
    put the project_Folder of stack "lcw_Caddy" into projectFolder
