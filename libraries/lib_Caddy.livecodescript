@@ -11,24 +11,90 @@ This library is for installing and manipulating a Caddy Server.
 The aim is to have a locally running Caddy environment which runs Livecode command line cgi/s and Javascript
 */
 
+--> Working on
+-
+function caddy_Version
+   return caddy_DoShell ("caddy version")
+end caddy_Version
 
-command caddy_TestSetBody sBody
-   -- caddy_TestSetBody "Work smarter, not harder."
-   put caddy_ConstructCurl (sBody) into sShell
-   put shell (sShell) into sResult
-   
-   /*
-   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-   Dload  Upload   Total   Spent    Left  Speed
-   
-   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
-   100   106  100    79  100    27   5240   1790 --:--:-- --:--:-- --:--:--  7066
-   {"error":"invalid traversal path at: config/apps/http/servers/example/routes"}
-   */
-   put line 1 to 3 of sResult into sHeader
-   delete line 1 to 3 of sResult
+command caddy_Run
+   put caddy_DoShell ("caddy run") into sResult
    return sResult
-end caddy_TestSetBody
+end caddy_Run
+
+function caddy_DoShell someShell
+   put caddyAsset_Folder() into cAssetFolder
+   put the defaultFolder into oFolder
+   set the defaultFolder to cAssetFolder
+   --
+   put shell (someShell) into sResult
+   --
+   set the defaultFolder to oFolder
+   return sResult
+end caddy_DoShell
+
+command caddy_DoShell someShellCommand
+   put caddy_GetBinFolder() into binFolder
+   set the defaultfolder to binFolder
+   --
+   if char 1 to 2 of someShellCommand is not "./" then
+      put "./" before someShellCommand
+   end if
+   put shell (someShellCommand) into shellResult
+   return shellResult
+end caddy_DoShell
+
+function caddy_GetBinFolder
+   -- where the CaddyFile and cadd binary are
+   put the project_Folder of stack "lcw_Caddy" into projectFolder
+   put asset_GetFolder (projectFolder, "bin") into binFolder
+   return binFolder
+end caddy_GetBinFolder
+
+function caddy_ConstructShell pLog
+   put "caddy start" into someShell
+   --
+   shell_WrapNohup someShell, pLog
+   shell_AddSource someShell
+   --
+   return someShell
+end caddy_ConstructShell
+
+function caddyFile_Get
+   -- should be in the same place as the caddy binary?
+end caddyFile_Get
+
+command caddyFile_Set caddyFile
+   
+end caddyFile_Set
+
+function caddyFile_Find
+   /*
+   Look for the File in Common Locations: Check these locations for the Caddyfile:
+   
+   /etc/caddy/Caddyfile
+   /usr/local/etc/caddy/Caddyfile
+   In the directory where you run the caddy command.
+   */
+end caddyFile_Find
+
+function caddyFile_ProjectDefault
+   put caddy_GetBinFolder() & "CaddyFile" into caddyFile
+   if there is a file caddyFile then
+      return caddyFile
+   else
+      return empty
+   end if
+end caddyFile_ProjectDefault
+
+function caddyFile_BrewDefault
+   put "/usr/local/etc/caddy/Caddyfile" into caddyFile
+   if there is a file caddyFile then
+      return caddyFile
+   else
+      return empty
+   end if
+end caddyFile_BrewDefault
 
 
 --> Display
@@ -50,6 +116,160 @@ command display_CaddyAdmin
    display_Browser "http://localhost:2019/config/"
 end display_CaddyAdmin
 
+
+--> Caddy | Start and Stop
+-
+command caddy_ToggleProxy
+   if caddy_IsRunning() then
+      caddy_Stop
+      put the result into pIDs
+      --
+      lcw_Notify ("Stopped Caddy servers." && pIDs)
+      return empty
+   else
+      caddy_Start
+      put the result into pID
+      --
+      lcw_Notify ("Started Caddy server on process" && pID)
+      return pID
+   end if
+end caddy_ToggleProxy
+
+command caddy_Adapt
+   put caddy_DoShell ("caddy adapt") into sResult
+   return sResult
+end caddy_Adapt
+
+command caddy_Start pLog
+   if caddy_IsRunning() is true then
+      put "Error, Caaddy is already runing!" into sWarning
+      lcw_Notify sWarning
+      return sWarning
+   end if
+   
+   
+   # Start in wiki assets folder to use local Caddyfile
+   put caddy_ConstructShell (pLog) into someShell
+   put caddy_DoShell (someShell) into sResult
+   put word 2 of sResult into pID
+   --
+   lcw_Notify "Started Caddy reverse-proxy using local wiki Caddyfile!"
+   return pID
+end caddy_Start
+
+command caddy_Stop
+   caddy_CloseServerProcesses
+   return the result
+   
+   # Gets stuck sometimes - put in background?
+   put caddy_ListProcessIds() into pIDs
+   switch the number of items of pIDs
+      case 0
+         return empty
+      case 1
+         put caddy_DoShell ("caddy stop") into sResult -- hangs sometimes
+         if sResult is not empty then
+            breakpoint
+         end if
+         break
+      default
+         caddy_CloseServerProcesses pIDs
+   end switch
+   return pIDs
+end caddy_Stop
+
+function caddy_IsRunning
+   put caddy_ListProcessIds() into pIDs
+   return pIDs is not empty
+end caddy_IsRunning
+
+function caddy_ListProcessIds
+   put ps_Grep ("caddy") into pids
+   return pids
+end caddy_ListProcessIds
+
+command caddy_CloseServerProcesses pIDs
+   if pIDs is not a number then
+      put caddy_ListProcessIds() into pIDs
+      if pIDs is empty then
+         lcw_Notify "No open Caddy servers..."
+         return empty
+      end if
+   end if
+   --
+   repeat for each item pID in pIDs
+      -- close process pName
+      kill process pID -- bug: does not kill?
+   end repeat
+   
+   # Notify
+   put "Closed caddy server using sockets" && pIDs & "!" into sComment
+   --
+   lcw_Notify sComment, "Caddy Server"
+   return pIDs
+end caddy_CloseServerProcesses
+
+command caddy_ForceQuit
+   breakpoint
+   put caddy_ListProcessIds() into pIDs
+   repeat for each item pID in pIDs
+      kill -9 process pIDs -- does not work on OSX
+   end repeat
+   put caddy_ListProcessIds() into stillOpenIDs
+   return stillOpenIDs
+end caddy_ForceQuit
+
+
+--> CaddyFile
+-
+function caddyFile_ConstructText pTopDomains, pToLocalHostPort
+   if pTopDomains is empty then
+      put wikiFolder_ListTopLevel() into pTopDomains
+   end if
+   --
+   put "{" into caddyFileText
+   put CR&Tab & "auto_https off" after caddyFileText
+   put CR & "}" after caddyFileText
+   put CR after caddyFileText
+   --
+   put platform_RestDomain() into restDomain
+   put CR & "# Handle" && restDomain after caddyFileText   
+   put _CaddyFileToProxy (9090) into toProxy
+   put platform_RestDomain() into restDomain
+   put CR & _CaddyFileProxyLine (restDomain, toProxy) after caddyFileText
+   --
+   put CR after caddyFileText
+   put CR & "# Catch-all for wikis and their subdomains" after caddyFileText
+   --
+   put _CaddyFileToProxy (pToLocalHostPort) into toProxy
+   repeat for each line wikiDomain in pTopDomains
+      put CR & _CaddyFileProxyLine (wikiDomain, toProxy) after caddyFileText
+      -- put CR after caddyFileText
+   end repeat
+   --
+   return caddyFileText
+end caddyFile_ConstructText
+
+
+--> Caddy | Files
+-
+function caddyAsset_ConstructFile pShortFile
+   if pShortFile is empty then put "CaddyFile" into pShortFile
+   --
+   put caddyAsset_Folder() & pShortFile into caddyAssetFile
+   return caddyAssetFile
+end caddyAsset_ConstructFile
+
+function caddyAsset_Folder
+   -- where the server files are served from
+   put wikiFolder_ConstructAssets ("server.livecode.wiki") into assetsFolder
+   put assetsFolder & "caddy/" into caddyAssetsFolder
+   return caddyAssetsFolder
+end caddyAsset_Folder
+
+
+--> Caddy | RouteArray
+-
 function caddyRouteArray_FindHostArray wikiDomain, routeIndexArray
    put caddyRouteArray_FindItemArray(wikiDomain, routeIndexArray) into routeItemArray
    put routeItemArray ["match"][1]["host"] into hostArray
@@ -98,97 +318,6 @@ function caddyRouteArray_Get caddyConfigData, pSrvName
 end caddyRouteArray_Get
 
 
---> Working on
--
-command caddy_Start pLog
-   if caddy_IsRunning() is true then
-      put "Error, Caaddy is already runing!" into sWarning
-      lcw_Notify sWarning
-      return sWarning
-   end if
-   
-   put "caddy start" into someShell
-   --
-   shell_WrapNohup someShell, pLog
-   shell_AddSource someShell
-   
-   # Start in wiki assets folder to use local Caddyfile
-   put caddy_DoShell (someShell) into sResult
-   put word 2 of sResult into pID
-   --
-   lcw_Notify "Started Caddy reverse-proxy using local wiki Caddyfile!"
-   return pID
-end caddy_Start
-
-command caddy_Stop
-   caddy_CloseServerProcesses
-   return the result
-   
-   # Gets stuck sometimes - put in background?
-   put caddy_ListProcessIds() into pIDs
-   switch the number of items of pIDs
-      case 0
-         return empty
-      case 1
-         put caddy_DoShell ("caddy stop") into sResult -- hangs sometimes
-         if sResult is not empty then
-            breakpoint
-         end if
-         break
-      default
-         caddy_CloseServerProcesses pIDs
-   end switch
-   return pIDs
-end caddy_Stop
-
-command caddy_CloseServerProcesses pIDs
-   if pIDs is not a number then
-      put caddy_ListProcessIds() into pIDs
-      if pIDs is empty then
-         lcw_Notify "No open Caddy servers..."
-         return empty
-      end if
-   end if
-   --
-   repeat for each item pID in pIDs
-      -- close process pName
-      kill process pID -- bug: does not kill?
-   end repeat
-   
-   # Notify
-   put "Closed caddy server using sockets" && pIDs & "!" into sComment
-   --
-   lcw_Notify sComment, "Caddy Server"
-   return pIDs
-end caddy_CloseServerProcesses
-
-command caddy_ForceQuit
-   breakpoint
-   put caddy_ListProcessIds() into pIDs
-   repeat for each item pID in pIDs
-      kill -9 process pIDs -- does not work on OSX
-   end repeat
-   put caddy_ListProcessIds() into stillOpenIDs
-   return stillOpenIDs
-end caddy_ForceQuit
-
-command toggleServer_Caddy
-   if caddy_IsRunning() then
-      caddy_Stop
-      put the result into pIDs
-      --
-      lcw_Notify ("Stopped Caddy servers." && pIDs)
-      return empty
-   else
-      caddy_Start
-      put the result into pID
-      --
-      lcw_Notify ("Started Caddy server on process" && pID)
-      return pID
-   end if
-end toggleServer_Caddy
-
-
 --> Caddy | Rest
 -
 command caddy_Post
@@ -224,7 +353,7 @@ function caddyRouteArray_Construct wikiDomain, toDomainPort
 end caddyRouteArray_Construct
 
 
---> Caddy
+--> Caddy | API | Config
 -
 function caddy_FetchConfig
    put caddy_FetchConfigJson() into cJSON
@@ -276,96 +405,8 @@ function caddy_ConstructArray
 end caddy_ConstructArray
 
 
---> Caddy
+--> Caddy | Asset
 -
-function caddy_Version
-   return caddy_DoShell ("caddy version")
-end caddy_Version
-
-command caddy_Adapt
-   put caddy_DoShell ("caddy adapt") into sResult
-   return sResult
-end caddy_Adapt
-
-function caddy_IsRunning
-   put caddy_ListProcessIds() into pIDs
-   return pIDs is not empty
-end caddy_IsRunning
-
-function caddy_ListProcessIds
-   put ps_Grep ("caddy") into pids
-   return pids
-end caddy_ListProcessIds
-
-command caddy_Run
-   put caddy_DoShell ("caddy run") into sResult
-   return sResult
-end caddy_Run
-
-command caddy_ConstructCaddyFileAndResart
-   caddy_Stop
-   put the result into pIDs
-   --
-   put caddyFile_Construct() into cText
-   caddyAsset_Set "Caddyfile", cText
-   lcw_Notify "Exported new CaddyFile based on local wiki folders."
-   --
-   caddy_Start
-end caddy_ConstructCaddyFileAndResart
-
-function caddy_DoShell someShell
-   put caddyAsset_Folder() into cAssetFolder
-   put the defaultFolder into oFolder
-   set the defaultFolder to cAssetFolder
-   --
-   put shell (someShell) into sResult
-   --
-   set the defaultFolder to oFolder
-   return sResult
-end caddy_DoShell
-
-function caddyFile_Construct pTopDomains, pToLocalHostPort
-   if pTopDomains is empty then
-      put wikiFolder_ListTopLevel() into pTopDomains
-   end if
-   --
-   put "{" into caddyFileText
-   put CR&Tab & "auto_https off" after caddyFileText
-   put CR & "}" after caddyFileText
-   put CR after caddyFileText
-   --
-   put platform_RestDomain() into restDomain
-   put CR & "# Handle" && restDomain after caddyFileText   
-   put caddFile_ConstructToProxy (9090) into toProxy
-   put platform_RestDomain() into restDomain
-   put CR & caddyFile_ConstructProxyLine (restDomain, toProxy) after caddyFileText
-   --
-   put CR after caddyFileText
-   put CR & "# Catch-all for wikis and their subdomains" after caddyFileText
-   --
-   put caddFile_ConstructToProxy (pToLocalHostPort) into toProxy
-   repeat for each line wikiDomain in pTopDomains
-      put CR & caddyFile_ConstructProxyLine (wikiDomain, toProxy) after caddyFileText
-      -- put CR after caddyFileText
-   end repeat
-   --
-   return caddyFileText
-end caddyFile_Construct
-
-function caddFile_ConstructToProxy pToLocalHostPort
-   if pToLocalHostPort is empty then put wikiServer_GetNodePort() into pToLocalHostPort
-   put "http://localhost:" & pToLocalHostPort into toProxy
-   return toProxy
-end caddFile_ConstructToProxy
-
-function caddyFile_ConstructProxyLine wikiDomain, toProxy
-   put "http://*.[[wikiDomain]], http://[[wikiDomain]]" into proxyLines
-   put space & "{" after proxyLines
-   put CR&Tab & "reverse_proxy [[toProxy]]" after proxyLines
-   put CR & "}" after proxyLines
-   return merge (proxyLines)
-end caddyFile_ConstructProxyLine
-
 function caddyAsset_Get pShortFile
    put caddyAsset_ConstructFile (pShortFile) into caddyAssetFile
    put text_Get (caddyAssetFile) into sText
@@ -393,51 +434,34 @@ on caddy_Install
    put "tar xvzf caddy.tar" into someShellCommand
    caddy_DoShell someShellCommand
    --
-   asset_DeleteFile projectFolder, "caddy.tar", "bin"
-   asset_DeleteFile projectFolder, "LICENSE", "bin"
-   asset_DeleteFile projectFolder, "README.md", "bin"
+   _DeleteInstalledFile projectFolder, "caddy.tar", "bin"
+   _DeleteInstalledFile projectFolder, "LICENSE", "bin"
+   _DeleteInstalledFile projectFolder, "README.md", "bin"
    --
    put asset_GetFile (projectFolder, "caddy", "bin") into caddyPath
    return caddyPath
 end caddy_Install
 
-command asset_DeleteFile projectFolder, shortFile, pShortAssetFolder
-   put asset_GetFolder (projectFolder, pShortAssetFolder) into assetFolder
-   put assetFolder & shortFile into assetFile
-   set the defaultfolder to assetFolder
-   --
+
+--> Private
+-
+private command _DeleteInstalledFile projectFolder, shortFile, pShortAssetFolder
+   breakpoint
+   put asset_GetFile (projectFolder, shortFile, pShortAssetFolder) into assetFile
    delete file assetFile
    return the result
-end asset_DeleteFile
+end _DeleteInstalledFile
 
-command caddy_DoShell someShellCommand
-   put caddy_GetBinFolder() into binFolder
-   set the defaultfolder to binFolder
-   --
-   if char 1 to 2 of someShellCommand is not "./" then
-      put "./" before someShellCommand
-   end if
-   put shell (someShellCommand) into shellResult
-   return shellResult
-end caddy_DoShell
+private function _CaddyFileToProxy pToLocalHostPort
+   if pToLocalHostPort is empty then put wikiServer_GetNodePort() into pToLocalHostPort
+   put "http://localhost:" & pToLocalHostPort into toProxy
+   return toProxy
+end _CaddyFileToProxy
 
-
---> Caddy | Files
--
-function caddyAsset_ConstructFile pShortFile
-   if pShortFile is empty then put "CaddyFile" into pShortFile
-   put caddyAsset_Folder() & pShortFile into caddyAssetFile
-   return caddyAssetFile
-end caddyAsset_ConstructFile
-
-function caddyAsset_Folder
-   put wikiFolder_ConstructAssets ("server.livecode.wiki") into assetsFolder
-   put assetsFolder & "caddy/" into caddyAssetsFolder
-   return caddyAssetsFolder
-end caddyAsset_Folder
-
-function caddy_GetBinFolder
-   put the project_Folder of stack "lcw_Caddy" into projectFolder
-   put asset_GetFolder (projectFolder, "bin") into binFolder
-   return binFolder
-end caddy_GetBinFolder
+private function _CaddyFileProxyLine wikiDomain, toProxy
+   put "http://*.[[wikiDomain]], http://[[wikiDomain]]" into proxyLines
+   put space & "{" after proxyLines
+   put CR&Tab & "reverse_proxy [[toProxy]]" after proxyLines
+   put CR & "}" after proxyLines
+   return merge (proxyLines)
+end _CaddyFileProxyLine

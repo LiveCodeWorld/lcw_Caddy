@@ -1,0 +1,85 @@
+{
+	auto_https off
+}
+
+# Handle rest.livecode.world
+http://*.rest.livecode.world, http://rest.livecode.world {
+	reverse_proxy http://localhost:9090
+}
+
+# Catch-all for wikis and their subdomains
+http://*.localhost, http://localhost {
+	reverse_proxy http://localhost:3000
+}
+http://*.anarchive.earth, http://anarchive.earth {
+	reverse_proxy http://localhost:3000
+}
+http://*.astralship.wiki, http://astralship.wiki {
+	reverse_proxy http://localhost:3000
+}
+http://*.bovill.me, http://bovill.me {
+	reverse_proxy http://localhost:3000
+}
+http://*.cico.club, http://cico.club {
+	reverse_proxy http://localhost:3000
+}
+http://*.commons.world, http://commons.world {
+	reverse_proxy http://localhost:3000
+}
+http://*.david.localhost, http://david.localhost {
+	reverse_proxy http://localhost:3000
+}
+http://*.democracy.garden, http://democracy.garden {
+	reverse_proxy http://localhost:3000
+}
+http://*.fedwiki.org, http://fedwiki.org {
+	reverse_proxy http://localhost:3000
+}
+http://*.fortytwo.fish, http://fortytwo.fish {
+	reverse_proxy http://localhost:3000
+}
+http://*.future.science, http://future.science {
+	reverse_proxy http://localhost:3000
+}
+http://*.hitchhikers.earth, http://hitchhikers.earth {
+	reverse_proxy http://localhost:3000
+}
+http://*.kharma.earth, http://kharma.earth {
+	reverse_proxy http://localhost:3000
+}
+http://*.legalcommons.org, http://legalcommons.org {
+	reverse_proxy http://localhost:3000
+}
+http://*.liquiddemocracy.org, http://liquiddemocracy.org {
+	reverse_proxy http://localhost:3000
+}
+http://*.livecode.world, http://livecode.world {
+	reverse_proxy http://localhost:3000
+}
+http://*.outlandish.academy, http://outlandish.academy {
+	reverse_proxy http://localhost:3000
+}
+http://*.platform.earth, http://platform.earth {
+	reverse_proxy http://localhost:3000
+}
+http://*.regovern.earth, http://regovern.earth {
+	reverse_proxy http://localhost:3000
+}
+http://*.soundgarden.wiki, http://soundgarden.wiki {
+	reverse_proxy http://localhost:3000
+}
+http://*.thought.garden, http://thought.garden {
+	reverse_proxy http://localhost:3000
+}
+http://*.unconference.earth, http://unconference.earth {
+	reverse_proxy http://localhost:3000
+}
+http://*.unincorporated.legal, http://unincorporated.legal {
+	reverse_proxy http://localhost:3000
+}
+http://*.unincorporated.wiki, http://unincorporated.wiki {
+	reverse_proxy http://localhost:3000
+}
+http://*.unlimited.wiki, http://unlimited.wiki {
+	reverse_proxy http://localhost:3000
+}
