@@ -13,52 +13,6 @@ The aim is to have a locally running Caddy environment which runs Livecode comma
 
 --> Working on
 -
-function caddy_Version
-   return caddy_DoShell ("caddy version")
-end caddy_Version
-
-command caddy_Run
-   put caddy_DoShell ("caddy run") into sResult
-   return sResult
-end caddy_Run
-
-function caddy_DoShell someShell
-   put caddyAsset_Folder() into cAssetFolder
-   put the defaultFolder into oFolder
-   set the defaultFolder to cAssetFolder
-   --
-   put shell (someShell) into sResult
-   --
-   set the defaultFolder to oFolder
-   return sResult
-end caddy_DoShell
-
-command caddy_DoShell someShellCommand
-   put caddy_GetBinFolder() into binFolder
-   set the defaultfolder to binFolder
-   --
-   if char 1 to 2 of someShellCommand is not "./" then
-      put "./" before someShellCommand
-   end if
-   put shell (someShellCommand) into shellResult
-   return shellResult
-end caddy_DoShell
-
-function caddy_GetBinFolder
-   -- where the CaddyFile and cadd binary are
-   put the project_Folder of stack "lcw_Caddy" into projectFolder
-   put asset_GetFolder (projectFolder, "bin") into binFolder
-   return binFolder
-end caddy_GetBinFolder
-
-function caddy_ConstructShell pLog
-   put "caddy start" into someShell
-   --
-   shell_WrapNohup someShell, pLog
-   shell_AddSource someShell
-   --
-   return someShell
-end caddy_ConstructShell
 
 function caddyFile_Get
    -- should be in the same place as the caddy binary?
@@ -95,6 +49,73 @@ function caddyFile_BrewDefault
       return empty
    end if
 end caddyFile_BrewDefault
+
+
+--> Caddy | Files
+-
+function caddyAsset_ConstructFile pShortFile
+   if pShortFile is empty then put "CaddyFile" into pShortFile
+   --
+   put caddyAsset_Folder() & pShortFile into caddyAssetFile
+   return caddyAssetFile
+end caddyAsset_ConstructFile
+
+function caddyAsset_Folder
+   -- where the server files are served from
+   put wikiFolder_ConstructAssets ("server.livecode.wiki") into assetsFolder
+   put assetsFolder & "caddy/" into caddyAssetsFolder
+   return caddyAssetsFolder
+end caddyAsset_Folder
+
+function caddy_GetBinFolder
+   -- where the CaddyFile and cadd binary are
+   put the project_Folder of stack "lcw_Caddy" into projectFolder
+   put asset_GetFolder (projectFolder, "bin") into binFolder
+   return binFolder
+end caddy_GetBinFolder
+
+
+--> Caddy
+-
+function caddy_Version
+   return caddy_DoShell ("caddy version")
+end caddy_Version
+
+command caddy_Run
+   put caddy_DoShell ("caddy run") into sResult
+   return sResult
+end caddy_Run
+
+function caddy_DoShell someShell
+   put caddyAsset_Folder() into cAssetFolder
+   put the defaultFolder into oFolder
+   set the defaultFolder to cAssetFolder
+   --
+   put shell (someShell) into sResult
+   --
+   set the defaultFolder to oFolder
+   return sResult
+end caddy_DoShell
+
+command caddy_DoShell someShellCommand
+   put caddy_GetBinFolder() into binFolder
+   set the defaultfolder to binFolder
+   --
+   if char 1 to 2 of someShellCommand is not "./" then
+      put "./" before someShellCommand
+   end if
+   put shell (someShellCommand) into shellResult
+   return shellResult
+end caddy_DoShell
+
+function caddy_ConstructShell pLog
+   put "caddy start" into someShell
+   --
+   shell_WrapNohup someShell, pLog
+   shell_AddSource someShell
+   --
+   return someShell
+end caddy_ConstructShell
 
 
 --> Display
@@ -249,23 +270,6 @@ function caddyFile_ConstructText pTopDomains, pToLocalHostPort
    --
    return caddyFileText
 end caddyFile_ConstructText
-
-
---> Caddy | Files
--
-function caddyAsset_ConstructFile pShortFile
-   if pShortFile is empty then put "CaddyFile" into pShortFile
-   --
-   put caddyAsset_Folder() & pShortFile into caddyAssetFile
-   return caddyAssetFile
-end caddyAsset_ConstructFile
-
-function caddyAsset_Folder
-   -- where the server files are served from
-   put wikiFolder_ConstructAssets ("server.livecode.wiki") into assetsFolder
-   put assetsFolder & "caddy/" into caddyAssetsFolder
-   return caddyAssetsFolder
-end caddyAsset_Folder
 
 
 --> Caddy | RouteArray
