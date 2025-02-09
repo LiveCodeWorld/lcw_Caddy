@@ -9,28 +9,99 @@ version: 0.6
 /*
 This library is for installing and manipulating a Caddy Server.
 The aim is to have a locally running Caddy environment which runs Livecode command line cgi/s and Javascript
+
+Check these locations for the Caddyfile:
+
+/etc/caddy/Caddyfile
+/usr/local/etc/caddy/Caddyfile
 */
 
---> Working on
+--> Variables
 -
+constant PlatformRestDomain = "rest.livecode.wiki"
+constant PlatformRestPort = 9090
 
-function caddyFile_Get
+
+--> CaddyFile
+-
+function caddyFile_ConstructText pTopDomains, pToLocalHostPort
+   if pTopDomains is empty then
+      put wikiFolder_ListTopLevel() into pTopDomains
+   end if
+   --
+   put "{" into caddyFileText
+   put CR&Tab & "auto_https off" after caddyFileText
+   put CR & "}" after caddyFileText
+   put CR after caddyFileText
+   --
+   put platform_RestDomain() into restDomain
+   put CR & "# Handle" && restDomain after caddyFileText   
+   put _CaddyFileToProxy (PlatformRestPort) into toProxy
+   put platform_RestDomain() into restDomain
+   put CR & _CaddyFileProxyLine (restDomain, toProxy) after caddyFileText
+   --
+   put CR after caddyFileText
+   put CR & "# Catch-all for wikis and their subdomains" after caddyFileText
+   --
+   put _CaddyFileToProxy (pToLocalHostPort) into toProxy
+   repeat for each line wikiDomain in pTopDomains
+      put CR & _CaddyFileProxyLine (wikiDomain, toProxy) after caddyFileText
+      -- put CR after caddyFileText
+   end repeat
+   --
+   return caddyFileText
+end caddyFile_ConstructText
+
+function caddyFile_Get pWhich
    -- should be in the same place as the caddy binary?
+   put caddyFile_Construct  (pWhich) into caddyFile
+   put text_Get  (caddyFile) into caddyText
+   return caddyText
 end caddyFile_Get
 
-command caddyFile_Set caddyFile
-   
+command caddyFile_Set caddyText, pWhich
+   put caddyFile_Construct  (pWhich) into caddyFile
+   text_Set caddyFile, caddyText
+   return caddyFile
 end caddyFile_Set
 
-function caddyFile_Find
-   /*
-   Look for the File in Common Locations: Check these locations for the Caddyfile:
-   
-   /etc/caddy/Caddyfile
-   /usr/local/etc/caddy/Caddyfile
-   In the directory where you run the caddy command.
-   */
-end caddyFile_Find
+
+--> Platform
+-
+function platform_WikiDomain pSubDomain
+   if pSubDomain is empty then
+      return PlatformWikiDomain
+   else
+      text_AddTrailing pSubDomain, "."
+      return pSubDomain & PlatformWikiDomain
+   end if
+end platform_WikiDomain
+
+function platform_RestUrl restBit
+   put "http://" & PlatformRestDomain into restURL
+   if restBit is not empty then
+      put slash & restBit after restURL
+   end if
+   return restURL
+end platform_RestUrl
+
+function platform_RestDomain
+   return PlatformRestDomain
+end platform_RestDomain
+
+
+--> Caddy | Files
+-
+function caddyFile_Construct pWhich
+   switch pWhich
+      case "brew"
+         put caddyFile_BrewDefault() into caddyFile
+         break
+      default
+         put caddyFile_ProjectDefault() into caddyFile
+   end switch
+   return caddyFile
+end caddyFile_Construct
 
 function caddyFile_ProjectDefault
    put caddy_GetBinFolder() & "CaddyFile" into caddyFile
@@ -50,29 +121,17 @@ function caddyFile_BrewDefault
    end if
 end caddyFile_BrewDefault
 
-
---> Caddy | Files
--
-function caddyAsset_ConstructFile pShortFile
-   if pShortFile is empty then put "CaddyFile" into pShortFile
-   --
-   put caddyAsset_Folder() & pShortFile into caddyAssetFile
-   return caddyAssetFile
-end caddyAsset_ConstructFile
-
-function caddyAsset_Folder
-   -- where the server files are served from
-   put wikiFolder_ConstructAssets ("server.livecode.wiki") into assetsFolder
-   put assetsFolder & "caddy/" into caddyAssetsFolder
-   return caddyAssetsFolder
-end caddyAsset_Folder
-
 function caddy_GetBinFolder
-   -- where the CaddyFile and cadd binary are
-   put the project_Folder of stack "lcw_Caddy" into projectFolder
-   put asset_GetFolder (projectFolder, "bin") into binFolder
+   -- where the CaddyFile and add binary are
+   put caddy_ProjectFolder() into caddyProjectFolder
+   put asset_GetFolder (caddyProjectFolder, "bin") into binFolder
    return binFolder
 end caddy_GetBinFolder
+
+function caddy_ProjectFolder
+   put the project_Folder of stack "lcw_Caddy" into projectFolder
+   return projectFolder
+end caddy_ProjectFolder
 
 
 --> Caddy
@@ -86,25 +145,16 @@ command caddy_Run
    return sResult
 end caddy_Run
 
-function caddy_DoShell someShell
-   put caddyAsset_Folder() into cAssetFolder
-   put the defaultFolder into oFolder
-   set the defaultFolder to cAssetFolder
-   --
-   put shell (someShell) into sResult
-   --
-   set the defaultFolder to oFolder
-   return sResult
-end caddy_DoShell
-
-command caddy_DoShell someShellCommand
+command caddy_DoShell sShell
    put caddy_GetBinFolder() into binFolder
    set the defaultfolder to binFolder
    --
-   if char 1 to 2 of someShellCommand is not "./" then
-      put "./" before someShellCommand
+   if char 1 to 2 of sShell is not "./" then
+      put "./" before sShell
    end if
-   put shell (someShellCommand) into shellResult
+   put shell (sShell) into shellResult
+   --
+   set the defaultFolder to oFolder
    return shellResult
 end caddy_DoShell
 
@@ -156,18 +206,12 @@ command caddy_ToggleProxy
    end if
 end caddy_ToggleProxy
 
-command caddy_Adapt
-   put caddy_DoShell ("caddy adapt") into sResult
-   return sResult
-end caddy_Adapt
-
 command caddy_Start pLog
    if caddy_IsRunning() is true then
       put "Error, Caaddy is already runing!" into sWarning
       lcw_Notify sWarning
       return sWarning
    end if
-   
    
    # Start in wiki assets folder to use local Caddyfile
    put caddy_ConstructShell (pLog) into someShell
@@ -198,16 +242,6 @@ command caddy_Stop
    end switch
    return pIDs
 end caddy_Stop
-
-function caddy_IsRunning
-   put caddy_ListProcessIds() into pIDs
-   return pIDs is not empty
-end caddy_IsRunning
-
-function caddy_ListProcessIds
-   put ps_Grep ("caddy") into pids
-   return pids
-end caddy_ListProcessIds
 
 command caddy_CloseServerProcesses pIDs
    if pIDs is not a number then
@@ -240,36 +274,20 @@ command caddy_ForceQuit
    return stillOpenIDs
 end caddy_ForceQuit
 
+command caddy_Adapt
+   put caddy_DoShell ("caddy adapt") into sResult
+   return sResult
+end caddy_Adapt
 
---> CaddyFile
--
-function caddyFile_ConstructText pTopDomains, pToLocalHostPort
-   if pTopDomains is empty then
-      put wikiFolder_ListTopLevel() into pTopDomains
-   end if
-   --
-   put "{" into caddyFileText
-   put CR&Tab & "auto_https off" after caddyFileText
-   put CR & "}" after caddyFileText
-   put CR after caddyFileText
-   --
-   put platform_RestDomain() into restDomain
-   put CR & "# Handle" && restDomain after caddyFileText   
-   put _CaddyFileToProxy (9090) into toProxy
-   put platform_RestDomain() into restDomain
-   put CR & _CaddyFileProxyLine (restDomain, toProxy) after caddyFileText
-   --
-   put CR after caddyFileText
-   put CR & "# Catch-all for wikis and their subdomains" after caddyFileText
-   --
-   put _CaddyFileToProxy (pToLocalHostPort) into toProxy
-   repeat for each line wikiDomain in pTopDomains
-      put CR & _CaddyFileProxyLine (wikiDomain, toProxy) after caddyFileText
-      -- put CR after caddyFileText
-   end repeat
-   --
-   return caddyFileText
-end caddyFile_ConstructText
+function caddy_IsRunning
+   put caddy_ListProcessIds() into pIDs
+   return pIDs is not empty
+end caddy_IsRunning
+
+function caddy_ListProcessIds
+   put ps_Grep ("caddy") into pids
+   return pids
+end caddy_ListProcessIds
 
 
 --> Caddy | RouteArray
@@ -407,21 +425,6 @@ function caddy_ConstructArray
    -- display_Data it, "Test Array"
    return it
 end caddy_ConstructArray
-
-
---> Caddy | Asset
--
-function caddyAsset_Get pShortFile
-   put caddyAsset_ConstructFile (pShortFile) into caddyAssetFile
-   put text_Get (caddyAssetFile) into sText
-   return sText
-end caddyAsset_Get
-
-command caddyAsset_Set pShortFile, sText
-   put caddyAsset_ConstructFile (pShortFile) into caddyAssetFile
-   text_Set caddyAssetFile, sText
-   return caddyAssetFile
-end caddyAsset_Set
 
 
 --> Caddy | Install
