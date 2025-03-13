@@ -18,8 +18,327 @@ Check these locations for the Caddyfile:
 
 --> Variables
 -
+local LocalArray
 constant PlatformRestDomain = "rest.livecode.wiki"
 constant PlatformRestPort = 9090
+constant CaddyPrefKey = "Caddy"
+
+
+--> Old
+-
+command caddy_StopProcess
+   breakpoint -- old
+   
+   # Gets stuck sometimes - put in background?
+   put caddy_ListProcessIds() into pIDs
+   switch the number of items of pIDs
+      case 0
+         return empty
+      case 1
+         caddy_DoShell "caddy stop" -- hangs sometimes
+         put the result into sResult
+         if sResult is not empty then
+            breakpoint
+         end if
+         break
+      default
+         caddy_CloseServerProcesses pIDs
+   end switch
+   return pIDs
+end caddy_StopProcess
+
+
+--> Working on
+-
+function brew_ListServices
+   put shell ("brew services list") into sResult
+   return sResult
+end brew_ListServices
+
+function caddyFile_Path pWhich
+   put caddyFile_Construct (pWhich) into caddyFile
+   if there is a file caddyFile then
+      return caddyFile
+   else
+      return empty
+   end if
+end caddyFile_Path
+
+function caddyFile_Construct pUsingBrew
+   if pUsingBrew is empty then
+      put caddy_GetUsingBrew() into pUsingBrew
+   end if
+   
+   if pUsingBrew is true then
+      put caddyFile_BrewDefault() into caddyFile
+   else
+      put caddyFile_ProjectDefault() into caddyFile
+   end if
+   return caddyFile
+end caddyFile_Construct
+
+function caddyFile_BrewDefault
+   put "/opt/homebrew/etc/Caddyfile" into caddyFile -- my M2 macOS
+   if there is a file caddyFile then
+      return caddyFile
+   else
+      return empty
+   end if
+end caddyFile_BrewDefault
+
+
+--> Platform
+-
+function platform_WikiDomain pSubDomain
+   if pSubDomain is empty then
+      return PlatformWikiDomain
+   else
+      text_AddTrailing pSubDomain, "."
+      return pSubDomain & PlatformWikiDomain
+   end if
+end platform_WikiDomain
+
+function platform_RestUrl restBit
+   put "http://" & PlatformRestDomain into restURL
+   if restBit is not empty then
+      put slash & restBit after restURL
+   end if
+   return restURL
+end platform_RestUrl
+
+function platform_RestDomain
+   return PlatformRestDomain
+end platform_RestDomain
+
+
+--> Display
+-
+command display_CaddyTools
+   -- put caddy_ConstructArray() into cArray
+   put caddy_FetchConfig() into caddyConfigData
+   put caddyRouteArray_Get(caddyConfigData) into routeArray
+   put caddyRouteArray_ListWikiHosts (routeArray) into wikiDomains
+   
+   display_Tool wikiDomains, "Admin", "Caddy", "lib_Caddy"
+   put the result into dView
+   --
+   set the caddy_ConfigData of dView to caddyConfigData
+   return dView
+end display_CaddyTools
+
+command display_CaddyAdmin
+   display_Browser "http://localhost:2019/config/"
+end display_CaddyAdmin
+
+
+--> Caddy | Start and Stop
+-
+command caddy_ToggleProxy
+   if caddy_IsRunning() then
+      caddy_Stop
+   else
+      caddy_Start
+   end if
+   return the result
+end caddy_ToggleProxy
+
+command caddy_Start pLog
+   if caddy_IsRunning() is true then return "Error, Caddy is already runing!"
+   
+   if caddy_GetUsingBrew() then
+      caddy_BrewStart
+   else
+      caddy_ProjectStart
+   end if
+   return the result
+end caddy_Start
+
+command caddy_Stop
+   if caddy_GetUsingBrew() then
+      caddy_BrewStop
+   else
+      caddy_CloseServerProcesses
+   end if
+   return the result
+end caddy_Stop
+
+command caddy_BrewStart
+   if caddy_IsRunning() is true then return "Error, Caddy is already runing!"
+   if caddy_BrewInstalled() is false then return "Error, Caddy not installed by brew"
+   
+   put shell ("brew services start caddy") into sResult
+   return sResult
+end caddy_BrewStart
+
+command caddy_BrewStop
+   put shell ("brew services stop caddy") into sResult
+   
+   /*
+   Stopping `caddy`... (might take a while)
+   ==> Successfully stopped `caddy` (label: homebrew.mxcl.caddy)
+   */
+   return sResult
+end caddy_BrewStop
+
+command caddy_ProjectStart
+   # Start Caddy
+   put caddy_ConstructHupShell (pLog) into someShell
+   caddy_DoShell someShell, false
+   put the result into sResult
+   put word 2 of sResult into pID
+   --
+   return pID
+end caddy_ProjectStart
+
+function caddy_ConstructHupShell pLog
+   put "caddy start" into someShell
+   --
+   shell_WrapNohup someShell, pLog
+   shell_AddSource someShell
+   --
+   return someShell
+end caddy_ConstructHupShell
+
+command caddy_Run pUsingBrew
+   caddy_DoShell "caddy run", pUsingBrew
+   return the result
+end caddy_Run
+
+command caddy_DoShell sShell, pUsingBrew
+   put caddy_GetBinFolder (pUsingBrew) into binFolder
+   set the defaultfolder to binFolder
+   --
+   if char 1 to 2 of sShell is not "./" then
+      put "./" before sShell
+   end if
+   put shell (sShell) into shellResult
+   --
+   set the defaultFolder to oFolder
+   return shellResult
+end caddy_DoShell
+
+
+--> Caddy | Install
+-
+command caddy_BrewInstall
+   put shell ("brew install caddy") into sResult
+   --
+   put caddy_BrewBinFileFromInfo() into brewBinFile
+   caddy_SetBrewBinPath brewBinFile
+   --
+   return sResult
+end caddy_BrewInstall
+
+command caddy_BrewUnInstall
+   if caddy_IsRunning() is true then
+      caddy_Stop
+   end if
+   
+   put shell ("brew uninstall caddy") into sResult
+   --
+   caddy_SetBrewBinPath "not installed"
+   return sResult
+end caddy_BrewUnInstall
+
+function caddy_BrewInstalled pForce
+   if pForce is true then
+      get caddy_BrewInfo()
+      return "Installed" is among the lines of it
+   else
+      put caddy_BrewBinFile() is not empty into isInstalled
+      return isInstalled
+   end if
+end caddy_BrewInstalled
+
+function caddy_BrewBinFile
+   put caddy_GetBrewBinPath() into brewBinFile
+   --
+   switch brewBinFile
+      case empty
+         put caddy_BrewBinFileFromInfo() into brewBinFile
+         if brewBinFile is empty then
+            caddy_SetBrewBinPath "not installed"
+         else
+            caddy_SetBrewBinPath brewBinFile
+         end if
+         return brewBinFile
+      case "not installed"
+         return empty
+      default
+         return brewBinFile
+   end switch
+end caddy_BrewBinFile
+
+function caddy_GetBrewBinPath
+   put caddy_GetPref ("brewBinFile") into brewBinFile
+   return brewBinFile
+end caddy_GetBrewBinPath
+
+command caddy_SetBrewBinPath brewBinFile
+   caddy_SetPref "brewBinFile", brewBinFile
+   return the result
+end caddy_SetBrewBinPath
+
+function caddy_BrewBinFileFromInfo
+   get caddy_BrewInfo()
+   put lineOffset ("Installed", it) into lineNum
+   if lineNum = 0 then return empty
+   
+   -- /opt/homebrew/Cellar/caddy/2.8.4 (39 files, 39.0MB) *
+   put line (lineNum + 1) of it into fileLine
+   return word 1 of fileLine
+end caddy_BrewBinFileFromInfo
+
+function caddy_BrewInfo
+   /*
+   caddy: stable 2.7.4
+   https://caddyserver.com/
+   ...
+   /usr/local/Cellar/caddy/2.7.4 (10 files, 23MB) *
+   Poured from bottle on 2024-03-09 at 10:00:00
+   From: https://github.com/Homebrew/homebrew-core/blob/master/Formula/caddy.rb
+   */
+   put shell ("brew info caddy") into brewInfo
+   return brewInfo
+end caddy_BrewInfo
+
+function caddy_GetUsingBrew
+   put caddy_GetPref ("usingBrew") into usingBrew
+   if usingBrew is empty then
+      return false
+   else
+      return usingBrew
+   end if
+end caddy_GetUsingBrew
+
+command caddy_SetUsingBrew sBoolean
+   caddy_SetPref "usingBrew", (sBoolean is true)
+   return the result
+end caddy_SetUsingBrew
+
+function caddy_GetPref prefName
+   put pref_FetchValue (prefName, CaddyPrefKey) into prefValue
+   return prefValue
+end caddy_GetPref
+
+command caddy_SetPref prefName, someValue
+   pref_SaveValue prefName, someValue, CaddyPrefKey
+   return the result
+end caddy_SetPref
+
+function caddy_GetBinFolder pUsingBrew
+   if pUsingBrew is empty then
+      put caddy_GetUsingBrew() into pUsingBrew
+   end if
+   
+   if pUsingBrew is true then
+      put caddy_BrewBinFolder() into binFolder
+   else
+      put caddy_ProjectFolder() into caddyProjectFolder
+      put asset_GetFolder (caddyProjectFolder, "bin") into binFolder
+   end if
+   return binFolder
+end caddy_GetBinFolder
 
 
 --> CaddyFile
@@ -66,42 +385,14 @@ command caddyFile_Set caddyText, pWhich
 end caddyFile_Set
 
 
---> Platform
+--> CaddyFile | Files
 -
-function platform_WikiDomain pSubDomain
-   if pSubDomain is empty then
-      return PlatformWikiDomain
-   else
-      text_AddTrailing pSubDomain, "."
-      return pSubDomain & PlatformWikiDomain
-   end if
-end platform_WikiDomain
-
-function platform_RestUrl restBit
-   put "http://" & PlatformRestDomain into restURL
-   if restBit is not empty then
-      put slash & restBit after restURL
-   end if
-   return restURL
-end platform_RestUrl
-
-function platform_RestDomain
-   return PlatformRestDomain
-end platform_RestDomain
-
-
---> Caddy | Files
--
-function caddyFile_Construct pWhich
-   switch pWhich
-      case "brew"
-         put caddyFile_BrewDefault() into caddyFile
-         break
-      default
-         put caddyFile_ProjectDefault() into caddyFile
-   end switch
-   return caddyFile
-end caddyFile_Construct
+function caddyFile_Folder pWhich
+   put caddyFile_Construct (pWhich) into caddFileFolder
+   set the itemdelimiter to slash
+   put empty into item -1 of caddFileFolder
+   return caddFileFolder
+end caddyFile_Folder
 
 function caddyFile_ProjectDefault
    put caddy_GetBinFolder() & "CaddyFile" into caddyFile
@@ -112,142 +403,43 @@ function caddyFile_ProjectDefault
    end if
 end caddyFile_ProjectDefault
 
-function caddyFile_BrewDefault
-   put "/usr/local/etc/caddy/Caddyfile" into caddyFile
-   if there is a file caddyFile then
-      return caddyFile
-   else
-      return empty
-   end if
-end caddyFile_BrewDefault
 
-function caddy_GetBinFolder
-   -- where the CaddyFile and add binary are
-   put caddy_ProjectFolder() into caddyProjectFolder
-   put asset_GetFolder (caddyProjectFolder, "bin") into binFolder
-   return binFolder
-end caddy_GetBinFolder
+--> Caddy
+-
+function caddy_ListBinFiles
+   get shell ("which caddy")
+   return it
+end caddy_ListBinFiles
+
+function caddy_GetBinFile
+   put caddy_GetBinFolder()
+end caddy_GetBinFile
+
+function caddy_BrewBinFolder
+   -- put "/opt/homebrew/Cellar/caddy/" into caddyBinFolder
+   put caddy_BrewBinFile() into caddyBinFolder
+   set the itemdelimiter to slash
+   put empty into item -1 of caddyBinFolder
+   return caddyBinFolder
+end caddy_BrewBinFolder
 
 function caddy_ProjectFolder
    put the project_Folder of stack "lcw_Caddy" into projectFolder
    return projectFolder
 end caddy_ProjectFolder
 
-
---> Caddy
--
 function caddy_Version
-   return caddy_DoShell ("caddy version")
+   caddy_DoShell "caddy version"
+   return the result
 end caddy_Version
 
-command caddy_Run
-   put caddy_DoShell ("caddy run") into sResult
-   return sResult
-end caddy_Run
 
-command caddy_DoShell sShell
-   put caddy_GetBinFolder() into binFolder
-   set the defaultfolder to binFolder
-   --
-   if char 1 to 2 of sShell is not "./" then
-      put "./" before sShell
-   end if
-   put shell (sShell) into shellResult
-   --
-   set the defaultFolder to oFolder
-   return shellResult
-end caddy_DoShell
-
-function caddy_ConstructShell pLog
-   put "caddy start" into someShell
-   --
-   shell_WrapNohup someShell, pLog
-   shell_AddSource someShell
-   --
-   return someShell
-end caddy_ConstructShell
-
-
---> Display
+--> Caddy | Process
 -
-command display_CaddyTools
-   -- put caddy_ConstructArray() into cArray
-   put caddy_FetchConfig() into caddyConfigData
-   put caddyRouteArray_Get(caddyConfigData) into routeArray
-   put caddyRouteArray_ListWikiHosts (routeArray) into wikiDomains
-   
-   display_Tool wikiDomains, "Admin", "Caddy", "lib_Caddy"
-   put the result into dView
-   --
-   set the caddy_ConfigData of dView to caddyConfigData
-   return dView
-end display_CaddyTools
-
-command display_CaddyAdmin
-   display_Browser "http://localhost:2019/config/"
-end display_CaddyAdmin
-
-
---> Caddy | Start and Stop
--
-command caddy_ToggleProxy
-   if caddy_IsRunning() then
-      caddy_Stop
-      put the result into pIDs
-      --
-      lcw_Notify ("Stopped Caddy servers." && pIDs)
-      return empty
-   else
-      caddy_Start
-      put the result into pID
-      --
-      lcw_Notify ("Started Caddy server on process" && pID)
-      return pID
-   end if
-end caddy_ToggleProxy
-
-command caddy_Start pLog
-   if caddy_IsRunning() is true then
-      put "Error, Caaddy is already runing!" into sWarning
-      lcw_Notify sWarning
-      return sWarning
-   end if
-   
-   # Start in wiki assets folder to use local Caddyfile
-   put caddy_ConstructShell (pLog) into someShell
-   put caddy_DoShell (someShell) into sResult
-   put word 2 of sResult into pID
-   --
-   lcw_Notify "Started Caddy reverse-proxy using local wiki Caddyfile!"
-   return pID
-end caddy_Start
-
-command caddy_Stop
-   caddy_CloseServerProcesses
-   return the result
-   
-   # Gets stuck sometimes - put in background?
-   put caddy_ListProcessIds() into pIDs
-   switch the number of items of pIDs
-      case 0
-         return empty
-      case 1
-         put caddy_DoShell ("caddy stop") into sResult -- hangs sometimes
-         if sResult is not empty then
-            breakpoint
-         end if
-         break
-      default
-         caddy_CloseServerProcesses pIDs
-   end switch
-   return pIDs
-end caddy_Stop
-
 command caddy_CloseServerProcesses pIDs
    if pIDs is not a number then
       put caddy_ListProcessIds() into pIDs
       if pIDs is empty then
-         lcw_Notify "No open Caddy servers..."
          return empty
       end if
    end if
@@ -256,11 +448,7 @@ command caddy_CloseServerProcesses pIDs
       -- close process pName
       kill process pID -- bug: does not kill?
    end repeat
-   
-   # Notify
-   put "Closed caddy server using sockets" && pIDs & "!" into sComment
    --
-   lcw_Notify sComment, "Caddy Server"
    return pIDs
 end caddy_CloseServerProcesses
 
@@ -275,7 +463,8 @@ command caddy_ForceQuit
 end caddy_ForceQuit
 
 command caddy_Adapt
-   put caddy_DoShell ("caddy adapt") into sResult
+   caddy_DoShell "caddy adapt"
+   put the result into sResult
    return sResult
 end caddy_Adapt
 
@@ -429,7 +618,7 @@ end caddy_ConstructArray
 
 --> Caddy | Install
 -
-on caddy_Install
+command caddy_InstallBinaryToProject
    put the project_Folder of stack "lcw_Caddy" into projectFolder
    --
    get url "https://github.com/caddyserver/caddy/releases/download/v2.0.0-rc.1/caddy_2.0.0-rc.1_macOS_x86_64.tar.gz"
@@ -447,7 +636,7 @@ on caddy_Install
    --
    put asset_GetFile (projectFolder, "caddy", "bin") into caddyPath
    return caddyPath
-end caddy_Install
+end caddy_InstallBinaryToProject
 
 
 --> Private
