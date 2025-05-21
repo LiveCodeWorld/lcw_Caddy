@@ -22,6 +22,7 @@ local LocalArray
 constant PlatformRestDomain = "rest.livecode.wiki"
 constant PlatformRestPort = 9090
 constant CaddyPrefKey = "Caddy"
+constant PlatformWikiDomain = "livecode.world" -- "handler.livecode.world"
 
 
 --> Old
