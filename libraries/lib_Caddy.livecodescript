@@ -19,10 +19,42 @@ Check these locations for the Caddyfile:
 --> Variables
 -
 local LocalArray
-constant PlatformRestDomain = "rest.livecode.wiki"
 constant PlatformRestPort = 9090
 constant CaddyPrefKey = "Caddy"
-constant PlatformWikiDomain = "livecode.world" -- "handler.livecode.world"
+
+
+--> Platform
+-
+function brew_ListServices
+   put shell ("brew services list") into sResult
+   return sResult
+end brew_ListServices
+
+
+--> Platform
+-
+function platform_RestDomain
+   return "rest.livecode.wiki"
+end platform_RestDomain
+
+function platform_LivecodeDomain pSubDomain
+   put "livecode.wiki" into platformWikiDomain
+   --
+   if pSubDomain is empty then
+      return platformWikiDomain
+   else
+      text_AddTrailing pSubDomain, "."
+      return pSubDomain & platformWikiDomain
+   end if
+end platform_LivecodeDomain
+
+function platform_RestUrl restBit
+   put "http://" & platform_RestDomain() into restURL
+   if restBit is not empty then
+      put slash & restBit after restURL
+   end if
+   return restURL
+end platform_RestUrl
 
 
 --> Old
@@ -51,11 +83,6 @@ end caddy_StopProcess
 
 --> Working on
 -
-function brew_ListServices
-   put shell ("brew services list") into sResult
-   return sResult
-end brew_ListServices
-
 function caddyFile_Path pWhich
    put caddyFile_Construct (pWhich) into caddyFile
    if there is a file caddyFile then
@@ -86,50 +113,6 @@ function caddyFile_BrewDefault
       return empty
    end if
 end caddyFile_BrewDefault
-
-
---> Platform
--
-function platform_WikiDomain pSubDomain
-   if pSubDomain is empty then
-      return PlatformWikiDomain
-   else
-      text_AddTrailing pSubDomain, "."
-      return pSubDomain & PlatformWikiDomain
-   end if
-end platform_WikiDomain
-
-function platform_RestUrl restBit
-   put "http://" & PlatformRestDomain into restURL
-   if restBit is not empty then
-      put slash & restBit after restURL
-   end if
-   return restURL
-end platform_RestUrl
-
-function platform_RestDomain
-   return PlatformRestDomain
-end platform_RestDomain
-
-
---> Display
--
-command display_CaddyTools
-   -- put caddy_ConstructArray() into cArray
-   put caddy_FetchConfig() into caddyConfigData
-   put caddyRouteArray_Get(caddyConfigData) into routeArray
-   put caddyRouteArray_ListWikiHosts (routeArray) into wikiDomains
-   
-   display_Tool wikiDomains, "Admin", "Caddy", "lib_Caddy"
-   put the result into dView
-   --
-   set the caddy_ConfigData of dView to caddyConfigData
-   return dView
-end display_CaddyTools
-
-command display_CaddyAdmin
-   display_Browser "http://localhost:2019/config/"
-end display_CaddyAdmin
 
 
 --> Caddy | Start and Stop
