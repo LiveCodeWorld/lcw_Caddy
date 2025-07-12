@@ -19,42 +19,7 @@ Check these locations for the Caddyfile:
 --> Variables
 -
 local LocalArray
-constant PlatformRestPort = 9090
 constant CaddyPrefKey = "Caddy"
-
-
---> Platform
--
-function brew_ListServices
-   put shell ("brew services list") into sResult
-   return sResult
-end brew_ListServices
-
-
---> Platform
--
-function platform_RestDomain
-   return "rest.livecode.wiki"
-end platform_RestDomain
-
-function platform_LivecodeDomain pSubDomain
-   put "livecode.wiki" into platformWikiDomain
-   --
-   if pSubDomain is empty then
-      return platformWikiDomain
-   else
-      text_AddTrailing pSubDomain, "."
-      return pSubDomain & platformWikiDomain
-   end if
-end platform_LivecodeDomain
-
-function platform_RestUrl restBit
-   put "http://" & platform_RestDomain() into restURL
-   if restBit is not empty then
-      put slash & restBit after restURL
-   end if
-   return restURL
-end platform_RestUrl
 
 
 --> Old
@@ -328,18 +293,17 @@ end caddy_GetBinFolder
 --> CaddyFile
 -
 function caddyFile_ConstructText pTopDomains, pToLocalHostPort
-   if pTopDomains is empty then
-      put wikiFolder_ListTopLevel() into pTopDomains
-   end if
+   if pTopDomains is empty then put wikiFolder_ListTopLevel() into pTopDomains
+   put platform_RestDomain() into restDomain
+   put platform_RestPort() into restPort
    --
    put "{" into caddyFileText
    put CR&Tab & "auto_https off" after caddyFileText
    put CR & "}" after caddyFileText
    put CR after caddyFileText
    --
-   put platform_RestDomain() into restDomain
    put CR & "# Handle" && restDomain after caddyFileText   
-   put _CaddyFileToProxy (PlatformRestPort) into toProxy
+   put _CaddyFileToProxy (restPort) into toProxy
    put platform_RestDomain() into restDomain
    put CR & _CaddyFileProxyLine (restDomain, toProxy) after caddyFileText
    --
